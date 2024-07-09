@@ -4,29 +4,42 @@ from lxml import html
 import json
 from bs4 import BeautifulSoup
 
-class FtbSpider(scrapy.Spider):
+class GloboSpider(scrapy.Spider):
     name = "globo"
-    allowed_domains = ['ge.globo.com']
-    start_urls = ['https://ge.globo.com/futebol/']
+    allowed_domains = ['globo.com']
     data = []
+    page = 1
+
+    def get_new_list(self,page):
+        return f'https://falkor-cda.bastian.globo.com/tenants/ge/instances/4ab5b6cd-f3e1-4be8-87c0-77bf6019d2a7/posts/page/{page}'
 
     def start_requests(self):
-        for url in self.start_urls:
-            yield SplashRequest(url, self.parse, args={'wait': 3})  # Increase wait time to allow JS to load
+        yield scrapy.Request(self.get_new_list(self.page), self.parse)  #从第1页开始爬取
 
     def parse(self, response):
-        
-        # 使用 lxml 解析 HTML
-        tree = html.fromstring(response.text)
-        
-        # 提取标题中的文章链接
-        article_links = tree.xpath('//div[@class="_evt"]/h2/a/@href')
+        res = json.loads(response.text)
 
-        # 遍历每一个链接，发送请求并调用 parse_link 进行解析
-        for link in article_links:
-            yield SplashRequest(link, self.parse_link, args={'wait': 3})
+        next_page = res['nextPage'] 
+
+        for item in res['items']:
+            detail_url = item['content']['url']
+            yield scrapy.Request(detail_url, self.parse_link) #解析获取到的链接
+
+        if next_page == 10: #这里通过判断时间
+            return
+        
+
+        if next_page == self.page: # 下一页等于当前页就是爬完了
+            print('end.')
+            return
+        else:
+            self.page = next_page
+            yield scrapy.Request(self.get_new_list(self.page), self.parse)
+
 
     def parse_link(self, response):
+        print('parse')
+
         # 使用 lxml 解析 HTML
         tree = html.fromstring(response.text)
 
